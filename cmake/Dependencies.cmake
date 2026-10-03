@@ -17,6 +17,15 @@ FetchContent_Declare(json
 )
 FetchContent_MakeAvailable(entt json)
 
+if(SEED_BUILD_TESTS)
+    FetchContent_Declare(catch2
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG v3.8.1
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(catch2)
+endif()
+
 if(SEED_BUILD_SANDBOX)
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(CUSTOMIZE_BUILD ON CACHE BOOL "" FORCE)

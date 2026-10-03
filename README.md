@@ -1,7 +1,7 @@
 # C++20 game engine seed
 
 A deliberately small desktop starting point with C++20, CMake, raylib, EnTT,
-nlohmann/json, Dear ImGui, and the rlImGui integration backend.
+nlohmann/json, Dear ImGui, the rlImGui integration backend, and Catch2 tests.
 
 ## What is implemented
 
@@ -75,7 +75,11 @@ cmake --build --preset headless-tests
 ctest --preset headless-tests
 ```
 
-This configuration still fetches EnTT and nlohmann/json. If Ninja is not available,
+The scene tests use Catch2, with each test case automatically registered in CTest.
+Add new `TEST_CASE`s to `tests/scene_tests.cpp`. Set `SEED_BUILD_TESTS=OFF` to
+disable the tests and skip fetching Catch2.
+
+This configuration still fetches EnTT, nlohmann/json, and Catch2. If Ninja is not available,
 use a normal CMake generator workflow instead of the presets:
 
 ```sh
@@ -218,6 +222,7 @@ it is a single-writer convenience, not an fsync-based durable storage system.
 | nlohmann/json | `v3.12.0` |
 | Dear ImGui | `v1.92.7` |
 | rlImGui | `Raylib_6_0` |
+| Catch2 | `v3.8.1` |
 
 These are selected revisions, not a claim that every dependency is the newest.
 The rlImGui release explicitly pairs raylib 6.0 with ImGui 1.92.7. The template
@@ -232,8 +237,7 @@ Start with a lighting shader, input actions, viewport picking, and an ImGuizmo
 transform gizmo. Add spdlog when a console/file/editor logging sink becomes
 useful. Add Jolt for 3D rigid-body physics when gameplay requires it, using a
 fixed physics step and an explicit transform synchronization policy. Add Tracy
-when profiling actual workloads. Catch2 can replace the tiny dependency-free
-test harness as the suite grows.
+when profiling actual workloads.
 
 ## Upstream references
 

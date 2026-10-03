@@ -1,66 +1,82 @@
 #include "engine/Scene.hpp"
 
-#include <cmath>
-#include <iostream>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+
 #include <stdexcept>
-#include <string>
 
 namespace {
-void require(bool condition, const std::string& message) {
-    if (!condition) throw std::runtime_error(message);
+nlohmann::json sampleScene() {
+    return nlohmann::json::parse(R"({
+        "version": 1,
+        "entities": [{
+            "id": "cube", "name": "Test cube", "model": "models/cube.glb",
+            "spin_degrees_per_second": 90.0,
+            "transform": {
+                "position": [1, 2, 3], "rotation_degrees": [0, 0, 0],
+                "scale": [1, 1, 1]
+            }
+        }]
+    })");
 }
-template<class Function>
-void mustThrow(Function function, const std::string& message) {
-    try { function(); }
-    catch (const std::exception&) { return; }
-    throw std::runtime_error(message);
-}
+} // namespace
+
+TEST_CASE("Scene JSON round-trips", "[scene]") {
+    const auto input = sampleScene();
+    const auto registry = engine::sceneFromJson(input);
+    REQUIRE(engine::sceneToJson(registry) == input);
 }
 
-int main() {
-    try {
-        const auto input = nlohmann::json::parse(R"({
-            "version": 1,
-            "entities": [{
-                "id": "cube", "name": "Test cube", "model": "models/cube.glb",
-                "spin_degrees_per_second": 90.0,
-                "transform": {
-                    "position": [1, 2, 3], "rotation_degrees": [0, 0, 0],
-                    "scale": [1, 1, 1]
-                }
-            }]
-        })");
-        auto registry = engine::sceneFromJson(input);
-        require(engine::sceneToJson(registry) == input, "Scene did not round-trip");
-        engine::fixedUpdate(registry, 0.5f);
-        const auto updated = engine::sceneToJson(registry);
-        require(std::abs(updated["entities"][0]["transform"]["rotation_degrees"][1].get<float>()
-                         - 45.0f) < 0.001f, "Fixed update used the wrong time step");
-        auto bad = input;
-        bad["entities"].push_back(bad["entities"][0]);
-        mustThrow([&] { (void)engine::sceneFromJson(bad); }, "Duplicate IDs accepted");
-        bad = input;
-        bad["version"] = 99;
-        mustThrow([&] { (void)engine::sceneFromJson(bad); }, "Unknown version accepted");
-        bad["version"] = 1.5;
-        mustThrow([&] { (void)engine::sceneFromJson(bad); }, "Fractional version accepted");
-        bad = input;
-        bad["entities"][0]["transform"]["scale"] = {1, 0, 1};
-        mustThrow([&] { (void)engine::sceneFromJson(bad); }, "Zero scale accepted");
-        bad = input;
-        bad["entities"][0]["transform"]["position"] = {1, 2};
-        mustThrow([&] { (void)engine::sceneFromJson(bad); }, "Short vector accepted");
-        bad = input;
-        bad["entities"][0]["model"] = "../escape.glb";
-        mustThrow([&] { (void)engine::sceneFromJson(bad); }, "Traversal path accepted");
-        mustThrow([&] { engine::fixedUpdate(registry, -1.0f); }, "Negative step accepted");
-        const auto empty = nlohmann::json::parse(R"({"version":1,"entities":[]})");
-        require(engine::sceneToJson(engine::sceneFromJson(empty)) == empty,
-                "Empty scene did not round-trip");
-        std::cout << "All scene checks passed\n";
-        return 0;
-    } catch (const std::exception& error) {
-        std::cerr << "Test failure: " << error.what() << '\n';
-        return 1;
-    }
+TEST_CASE("Fixed update uses the supplied time step", "[scene][update]") {
+    auto registry = engine::sceneFromJson(sampleScene());
+    engine::fixedUpdate(registry, 0.5f);
+    const auto updated = engine::sceneToJson(registry);
+    const auto rotation = updated["entities"][0]["transform"]["rotation_degrees"][1].get<float>();
+    REQUIRE_THAT(rotation, Catch::Matchers::WithinAbs(45.0, 0.001));
+}
+
+TEST_CASE("Scene rejects duplicate entity IDs", "[scene][validation]") {
+    auto input = sampleScene();
+    input["entities"].push_back(input["entities"][0]);
+    REQUIRE_THROWS_AS(engine::sceneFromJson(input), std::runtime_error);
+}
+
+TEST_CASE("Scene rejects unknown schema versions", "[scene][validation]") {
+    auto input = sampleScene();
+    input["version"] = 99;
+    REQUIRE_THROWS_AS(engine::sceneFromJson(input), std::runtime_error);
+}
+
+TEST_CASE("Scene rejects fractional schema versions", "[scene][validation]") {
+    auto input = sampleScene();
+    input["version"] = 1.5;
+    REQUIRE_THROWS_AS(engine::sceneFromJson(input), std::runtime_error);
+}
+
+TEST_CASE("Scene rejects zero scale", "[scene][validation]") {
+    auto input = sampleScene();
+    input["entities"][0]["transform"]["scale"] = {1, 0, 1};
+    REQUIRE_THROWS_AS(engine::sceneFromJson(input), std::runtime_error);
+}
+
+TEST_CASE("Scene rejects short transform vectors", "[scene][validation]") {
+    auto input = sampleScene();
+    input["entities"][0]["transform"]["position"] = {1, 2};
+    REQUIRE_THROWS_AS(engine::sceneFromJson(input), std::runtime_error);
+}
+
+TEST_CASE("Scene rejects asset path traversal", "[scene][validation]") {
+    auto input = sampleScene();
+    input["entities"][0]["model"] = "../escape.glb";
+    REQUIRE_THROWS_AS(engine::sceneFromJson(input), std::runtime_error);
+}
+
+TEST_CASE("Fixed update rejects negative time steps", "[scene][update][validation]") {
+    auto registry = engine::sceneFromJson(sampleScene());
+    REQUIRE_THROWS_AS(engine::fixedUpdate(registry, -1.0f), std::runtime_error);
+}
+
+TEST_CASE("Empty scene JSON round-trips", "[scene]") {
+    const auto input = nlohmann::json::parse(R"({"version":1,"entities":[]})");
+    REQUIRE(engine::sceneToJson(engine::sceneFromJson(input)) == input);
 }
