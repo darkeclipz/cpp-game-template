@@ -1,0 +1,5 @@
+/build/
+/CMakeUserPresets.json
+/scene.saved.json
+/scene.saved.json.tmp
+/imgui.ini
