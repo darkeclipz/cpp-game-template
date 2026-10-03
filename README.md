@@ -1,7 +1,7 @@
 # C++20 game engine seed
 
 A deliberately small desktop starting point with C++20, CMake, raylib, EnTT,
-nlohmann/json, Dear ImGui, the rlImGui integration backend, and Catch2 tests.
+nlohmann/json, spdlog, Dear ImGui, the rlImGui integration backend, and Catch2 tests.
 
 ## What is implemented
 
@@ -14,6 +14,7 @@ nlohmann/json, Dear ImGui, the rlImGui integration backend, and Catch2 tests.
 - Versioned JSON scene serialization with stable application-level entity IDs.
 - Input capture handling for the inspector and separate non-graphical scene tests.
 - Debug, editor-free Release, and graphics-free test CMake presets.
+- Console logging for startup, scene snapshots, shutdown, and errors through spdlog.
 
 This is not a full editor or a complete renderer. There is no physics, lighting
 system, PBR shader, shadow pass, skeletal animation playback, asset hot reload,
@@ -66,6 +67,16 @@ cmake --build --preset release
 
 The Release preset turns off the inspector and does not fetch ImGui or rlImGui.
 The core simulation and rendering remain enabled.
+
+The sandbox logs to the console with timestamps and severity levels, with color
+when supported by the terminal. Startup, scene loading/saving, and shutdown use
+`info`; snapshot failures use `error`, and fatal errors use `critical`. To add a
+message in `src/main.cpp`, use `spdlog::info("[engine] Loaded {}", name)`
+(or `warn`/`error`). Application messages use the `[engine]` prefix.
+Raylib diagnostics are routed through the same spdlog console logger with a
+`[raylib]` prefix and matching severity levels (`LOG_FATAL` maps to `critical`
+and still exits the process). The spdlog level controls filtering for both sources;
+the default is `info`.
 
 For scene tests without raylib, a GPU, or a window system:
 
@@ -178,8 +189,8 @@ tools/make_sample_model.py
 ```
 
 `engine_scene` only links EnTT and JSON. `engine_render` adds raylib. `sandbox`
-adds the optional inspector. Strict warnings are applied to our code, not forced
-onto dependency source files. For a larger project, move the inspector and camera
+adds spdlog and the optional inspector. Strict warnings are applied to our code,
+not forced onto dependency source files. For a larger project, move the inspector and camera
 out of `main.cpp`; their current placement keeps the initial file count small.
 
 ## Ownership and extension boundaries
@@ -220,6 +231,7 @@ it is a single-writer convenience, not an fsync-based durable storage system.
 | raylib | `6.0` |
 | EnTT | `v3.15.0` |
 | nlohmann/json | `v3.12.0` |
+| spdlog | `v1.15.3` |
 | Dear ImGui | `v1.92.7` |
 | rlImGui | `Raylib_6_0` |
 | Catch2 | `v3.8.1` |
@@ -234,8 +246,8 @@ Third-party source and binaries are fetched at configure time, not bundled here.
 ## Sensible next additions
 
 Start with a lighting shader, input actions, viewport picking, and an ImGuizmo
-transform gizmo. Add spdlog when a console/file/editor logging sink becomes
-useful. Add Jolt for 3D rigid-body physics when gameplay requires it, using a
+transform gizmo. Add file or editor logging sinks when they become useful.
+Add Jolt for 3D rigid-body physics when gameplay requires it, using a
 fixed physics step and an explicit transform synchronization policy. Add Tracy
 when profiling actual workloads.
 

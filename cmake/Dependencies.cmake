@@ -27,6 +27,17 @@ if(SEED_BUILD_TESTS)
 endif()
 
 if(SEED_BUILD_SANDBOX)
+    set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+    set(SPDLOG_INSTALL OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG v1.15.3
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(spdlog)
+
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(CUSTOMIZE_BUILD ON CACHE BOOL "" FORCE)
     # The sandbox uses EndDrawing for presentation, timing and input polling.

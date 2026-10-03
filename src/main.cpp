@@ -2,6 +2,8 @@
 #include "engine/Scene.hpp"
 
 #include <raylib.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 
 #if SEED_WITH_EDITOR
 #include <imgui.h>
@@ -10,6 +12,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -18,6 +23,45 @@
 
 namespace {
 namespace fs = std::filesystem;
+
+void logRaylib(int logLevel, const char* text, va_list args) {
+    spdlog::level::level_enum level;
+    switch (logLevel) {
+        case LOG_TRACE: level = spdlog::level::trace; break;
+        case LOG_DEBUG: level = spdlog::level::debug; break;
+        case LOG_INFO: level = spdlog::level::info; break;
+        case LOG_WARNING: level = spdlog::level::warn; break;
+        case LOG_ERROR: level = spdlog::level::err; break;
+        case LOG_FATAL: level = spdlog::level::critical; break;
+        default: return;
+    }
+
+    // Raylib uses printf formatting; render it before passing it to spdlog.
+    va_list copy;
+    va_copy(copy, args);
+    const int length = std::vsnprintf(nullptr, 0, text, copy);
+    va_end(copy);
+    if (length >= 0) {
+        std::string message(static_cast<std::size_t>(length) + 1, '\0');
+        va_copy(copy, args);
+        std::vsnprintf(message.data(), message.size(), text, copy);
+        va_end(copy);
+        message.resize(static_cast<std::size_t>(length));
+        // The console sink supplies the newline.
+        while (!message.empty() && (message.back() == '\n' || message.back() == '\r')) {
+            message.pop_back();
+        }
+        spdlog::log(level, "[raylib] {}", message);
+    } else {
+        spdlog::error("[raylib] Failed to format log message");
+    }
+
+    // Raylib returns immediately after invoking a callback, even for LOG_FATAL.
+    if (logLevel == LOG_FATAL) {
+        spdlog::default_logger()->flush();
+        std::exit(EXIT_FAILURE);
+    }
+}
 
 struct Options {
     fs::path assets = fs::path(GetApplicationDirectory()) / "assets";
@@ -112,7 +156,11 @@ public:
                 try {
                     engine::saveScene(world, options.save);
                     status_ = "Saved: " + options.save.string();
-                } catch (const std::exception& error) { status_ = error.what(); }
+                    spdlog::info("[engine] Saved scene to {}", options.save.string());
+                } catch (const std::exception& error) {
+                    status_ = error.what();
+                    spdlog::error("[engine] Failed to save scene to {}: {}", options.save.string(), error.what());
+                }
             }
             ImGui::SameLine();
             if (ImGui::Button("Load snapshot")) reload(world, assets, options.save);
@@ -154,7 +202,11 @@ private:
             world = std::move(replacement);
             selected_ = entt::null;
             status_ = "Loaded: " + path.string();
-        } catch (const std::exception& error) { status_ = error.what(); }
+            spdlog::info("[engine] Reloaded scene from {}", path.string());
+        } catch (const std::exception& error) {
+            status_ = error.what();
+            spdlog::error("[engine] Failed to reload scene from {}: {}", path.string(), error.what());
+        }
     }
     entt::entity selected_ = entt::null;
     std::string status_;
@@ -162,10 +214,13 @@ private:
 #endif
 
 int run(const Options& options) {
+    spdlog::info("[engine] Starting sandbox; asset root: {}", options.assets.string());
     auto world = engine::loadScene(options.scene);
+    spdlog::info("[engine] Loaded scene from {}", options.scene.string());
     Window window; // Must outlive every GPU resource and the ImGui backend.
     engine::AssetCache assets(options.assets);
     assets.preload(world);
+    spdlog::info("[engine] Preloaded {} model(s)", assets.size());
     OrbitCamera camera;
 #if SEED_WITH_EDITOR
     Editor editor;
@@ -222,6 +277,7 @@ int run(const Options& options) {
                 throw std::runtime_error("Frame timing did not advance; disable raylib custom frame control");
             }
             running = false;
+            spdlog::info("[engine] Smoke test passed ({} frames)", frames);
         }
     }
     return 0;
@@ -230,15 +286,23 @@ int run(const Options& options) {
 
 int main(int argc, char** argv) {
     try {
+        spdlog::set_default_logger(spdlog::stdout_color_mt("sandbox"));
+        spdlog::set_pattern("[%H:%M:%S] [%^%l%$] %v");
+        spdlog::set_level(spdlog::level::info);
+        SetTraceLogCallback(logRaylib);
+        // Let spdlog control filtering for both application and raylib messages.
+        SetTraceLogLevel(LOG_ALL);
         for (int i = 1; i < argc; ++i) {
             if (std::string(argv[i]) == "--help") {
                 std::cout << "sandbox [--assets DIR] [--scene FILE] [--save FILE] [--smoke-test]\n";
                 return 0;
             }
         }
-        return run(parseOptions(argc, argv));
+        const int result = run(parseOptions(argc, argv));
+        spdlog::info("[engine] Sandbox shut down");
+        return result;
     } catch (const std::exception& error) {
-        std::cerr << "Fatal: " << error.what() << '\n';
+        spdlog::critical("[engine] Fatal: {}", error.what());
         return 1;
     }
 }

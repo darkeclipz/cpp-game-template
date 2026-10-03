@@ -32,7 +32,7 @@ if(SEED_BUILD_SANDBOX)
     seed_warnings(engine_render)
 
     add_executable(sandbox src/main.cpp)
-    target_link_libraries(sandbox PRIVATE engine_render)
+    target_link_libraries(sandbox PRIVATE engine_render spdlog::spdlog)
     target_compile_definitions(sandbox PRIVATE SEED_WITH_EDITOR=$<BOOL:${SEED_WITH_EDITOR}>)
     if(SEED_WITH_EDITOR)
         target_link_libraries(sandbox PRIVATE seed_rlimgui)
